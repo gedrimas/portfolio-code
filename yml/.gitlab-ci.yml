@@ -1,0 +1,45 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+
+stages:
+  - set version
+  - build and push image
+  - update helm chart
+
+Set version:
+  stage: set version
+  script: 
+    - echo "VERSION_TAG=$(git describe --tags --abbrev=0)" >> build.env
+  artifacts: 
+    reports:
+      dotenv: build.env
+
+Build Auth:
+  stage: build and push image
+  image: docker:20
+  services:
+    - docker:dind
+  script:
+    - docker build -t $IMAGE:$VERSION_TAG .
+    - echo $DOCKERHUB_TOKEN | docker login --username $DOCKERHUB_USER --password-stdin
+    - docker push "$IMAGE:$VERSION_TAG"
+
+Update auth version:
+  stage: update helm chart
+  before_script:
+    - echo "CI_PROJECT_NAME $CI_PROJECT_NAME"
+    - echo "CI_MERGE_REQUEST_TARGET_BRANCH_NAME $CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - cd ../
+    - git clone https://oauth2:$CLONE_TOKEN@gitlab.com/regapp-group/regapp-helm.git
+    - cd ./regapp-helm
+    - git checkout $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+  script:  
+    - ../auth-regapp/bash_scripts/update_helm_chart_version.sh ../regapp-helm/regapp-chart/Chart.yaml
+    - ../auth-regapp/bash_scripts/update_helm_values.sh ../regapp-helm/regapp-chart/values-$CI_MERGE_REQUEST_TARGET_BRANCH_NAME.yaml $CI_PROJECT_NAME $VERSION_TAG $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - git config --global user.email "a.a.gedrimas@gmail.com"
+    - git config --global user.name "a.a.gedrimas@gmail.com"
+    - git add ./regapp-chart/Chart.yaml ./regapp-chart/values-$CI_MERGE_REQUEST_TARGET_BRANCH_NAME.yaml
+    - git commit -m "new version $VERSION_TAG"
+    - git push --set-upstream origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+     
