@@ -43,7 +43,6 @@ func GetVisitors() gin.HandlerFunc {
 		visitorsId := strings.Split(c.Param("ids"), ",")
 		opts := options.Find().SetProjection(bson.D{{Key: "username", Value: 1}, {Key: "email", Value: 1}, {Key: "phone", Value: 1}, {Key: "facebook", Value: 1}})
 
-		var visitor []models.Visitor
 		vChan := make(chan models.Visitor, 10)
 
 		var waitGroup = sync.WaitGroup{}
@@ -59,6 +58,7 @@ func GetVisitors() gin.HandlerFunc {
 						waitGroup.Done()
 						panic(err)
 					} else {
+						var visitor []models.Visitor
 						if err = v.All(ctx, &visitor); err != nil {
 							waitGroup.Done()
 							panic(err)
